@@ -19,7 +19,34 @@ const handlers = {
     },
     _users: {
         get: (data, callback) => {
-
+            let phoneNumber = typeof (data.query.phoneNumber) == "string" && data.query.phoneNumber.trim().length == 12 ? data.query.phoneNumber.trim() : false;
+            const db = getDb();
+            if (phoneNumber) {
+                if (db) {
+                    const query = {
+                        phoneNumber
+                    };
+                    const projection = {
+                        fields: { password: 0 }
+                    }
+                    db.collection("users").findOne(query, projection).then((result) => {
+                        callback(200, {
+                            result
+                        });
+                    }).catch((error) => {
+                        callback(500, { Error: error});
+                    });
+                } else {
+                    console.log("Database object not found.");
+                    callback(500, {
+                        Error: "Database error occurred"
+                    });
+                }
+            } else {
+                callback(400, {
+                    Error: "Missing required fields."
+                });
+            }
         },
         post: (data, callback) => {
             let firstname = typeof (data.payload.firstname) == "string" && data.payload.firstname.trim().length > 0 ? data.payload.firstname.trim() : false;
@@ -43,6 +70,11 @@ const handlers = {
                     cursor.hasNext().then((response) => {
                         if (!response) {
                             let hashedPassword = helpers.hash(password);
+                            if (!hashedPassword) {
+                                callback(400, {
+                                    Error: "Could not hash user's password."
+                                });
+                            }
                             let user = {
                                 firstname,
                                 lastname,

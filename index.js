@@ -57,7 +57,8 @@ const unifiedServer = (req, res) => {
             trimmedPath,
             method,
             headers,
-            payload
+            payload,
+            query: queryStringObject
         }
         chosenHandler(data, (statusCode, payload) => {
             statusCode = typeof (statusCode) == "number" ? statusCode : 200;
