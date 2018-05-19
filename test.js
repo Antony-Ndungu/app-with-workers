@@ -12,5 +12,5 @@ MongoClient.connect("mongodb://localhost:27017", { useNewUrlParser: true }, (err
             console.log(doc.president);
         });
         client.close();
-    })
-})
+    });
+});

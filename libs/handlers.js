@@ -27,14 +27,18 @@ const handlers = {
                         phoneNumber
                     };
                     const projection = {
-                        fields: { password: 0 }
+                        fields: {
+                            password: 0
+                        }
                     }
                     db.collection("users").findOne(query, projection).then((result) => {
                         callback(200, {
                             result
                         });
                     }).catch((error) => {
-                        callback(500, { Error: error});
+                        callback(500, {
+                            Error: error
+                        });
                     });
                 } else {
                     console.log("Database object not found.");
@@ -72,17 +76,17 @@ const handlers = {
                             let hashedPassword = helpers.hash(password);
                             if (!hashedPassword) {
                                 callback(400, {
-                                    Error: "Could not hash user's password."
+                                    Error: "Could not hash update's password."
                                 });
                             }
-                            let user = {
+                            let update = {
                                 firstname,
                                 lastname,
                                 phoneNumber,
                                 password: hashedPassword,
                                 tosAgreement
                             }
-                            db.collection("users").insertOne(user, (err, results) => {
+                            db.collection("users").insertOne(update, (err, results) => {
                                 if (err) throw err;
                                 callback(200, {
                                     Success: "User created successfully"
@@ -90,7 +94,7 @@ const handlers = {
                             });
                         } else {
                             callback(409, {
-                                "Error": "There's another user with the same phone number: " + phoneNumber + "."
+                                "Error": "There's another update with the same phone number: " + phoneNumber + "."
                             });
                         }
                     }).catch((error) => {
@@ -111,7 +115,59 @@ const handlers = {
             }
         },
         put: (data, callback) => {
-
+            let phoneNumber = typeof (data.payload.phoneNumber) == "string" && data.payload.phoneNumber.trim().length == 12 ? data.payload.phoneNumber.trim() : false;
+            let firstname = typeof (data.payload.firstname) == "string" && data.payload.firstname.trim().length > 0 ? data.payload.firstname.trim() : false;
+            let lastname = typeof (data.payload.lastname) == "string" && data.payload.lastname.trim().length > 0 ? data.payload.lastname.trim() : false;
+            let password = typeof (data.payload.password) == "string" && data.payload.password.trim().length > 0 ? data.payload.password.trim() : false;
+            let db = getDb();
+            if(phoneNumber){
+                if(firstname || lastname || password){
+                    if(db){
+                        let filter = { phoneNumber };
+                        let update = {};
+                        let projection = { phoneNumber: 1, _id: 0 };
+                        let cursor = db.collection("users").find(filter)
+                        cursor.project(projection);
+                        cursor.hasNext().then(response => {
+                            if(response){
+                                if(firstname){
+                                    update = {...update, firstname};
+                                }
+                                if(lastname){
+                                    update = {...update, lastname};
+                                }
+                                if(password){
+                                    update = {...update, password: helpers.hash(password)};
+                                }
+                                update = { $set: update };
+                                db.collection("users").updateOne(filter, update, (err, result) => {
+                                    if(err){
+                                        callback(500, {Error: "An error occurred while trying to update the user."});
+                                    }
+                                    if(result.matchedCount != 1){
+                                        callback(500, {Error: "The specified user was not found."});
+                                    }
+                                    if(result.modifiedCount == 1){
+                                        callback(200, {Success: "The user was update successully"});
+                                    }else{
+                                        callback(500, { Error: "Something went wrong while updating the user."});
+                                    }
+                                });
+                            }else{
+                                callback(400, { Error: "The specified user was not found."});
+                            }
+                        }).catch(error => {
+                            callback(500, { Error: "Something went wrong while finding the user to update."});
+                        })
+                    }else{
+                        callback(500, {Error: "No database objecet found."});
+                    }
+                }else{
+                    callback(400, { Error: "Missing fields to update."});
+                }
+            }else{
+                callback(400, { Error: "Missing required fields."});
+            } 
         },
         delete: (data, callback) => {
 
