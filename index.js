@@ -14,7 +14,8 @@ mongoUtil.connect()
 
 const router = {
     "ping": handlers.ping,
-    "users": handlers.users
+    "users": handlers.users,
+    "tokens": handlers.tokens
 };
 
 const httpServer = http.createServer((req, res) => {

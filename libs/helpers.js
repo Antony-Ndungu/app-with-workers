@@ -13,6 +13,21 @@ const helpers = {
         }else{
             return false;
         }
+    },
+    createRamdomString: strLength => {
+        strLength = typeof(strLength) == "number" && strLength > 0 ? strLength : false;
+        if(strLength){
+            let randomString = "";
+            let possibleCharacters = "abcdefghijklmnopqrstuvwxyz0123456789";
+            let randomCharacter;
+            for(i = 0; i < strLength; i++){
+                randomCharacter = possibleCharacters.charAt(Math.floor(Math.random() * possibleCharacters.length));
+                randomString += randomCharacter;
+            }
+            return randomString;
+        }else{
+            return false;
+        }
     }
 }
 
