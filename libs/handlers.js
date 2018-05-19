@@ -15,15 +15,19 @@ const handlers = {
         if (accepatableMethods.indexOf(data.method) > -1) {
             handlers._users[data.method](data, callback);
         } else {
-            callback(405, { Error: "This service does not support the specified HTTP method for the specified resource."});
+            callback(405, {
+                Error: "This service does not support the specified HTTP method for the specified resource."
+            });
         }
     },
     tokens: (data, callback) => {
         const accepatableMethods = ["get", "post", "put", "delete"];
-        if(accepatableMethods.indexOf(data.method) > -1){
+        if (accepatableMethods.indexOf(data.method) > -1) {
             handlers._tokens[data.method](data, callback);
-        } else{
-            callback(405, { Error: "This service does not support the specified HTTP method for the specified resource."});
+        } else {
+            callback(405, {
+                Error: "This service does not support the specified HTTP method for the specified resource."
+            });
         }
     },
     _users: {
@@ -255,60 +259,180 @@ const handlers = {
     },
     _tokens: {
         get: (data, callback) => {
-
+            let id = typeof (data.query.id) == "string" && data.query.id.trim().length == 20 ? data.query.id.trim() : false;
+            const db = getDb();
+            if (id) {
+                if (db) {
+                    const query = {
+                        id
+                    };
+                    const projection = {
+                        fields: {
+                            _id: 0
+                        }
+                    }
+                    db.collection("tokens").findOne(query, projection).then((result) => {
+                        callback(200, {
+                            result
+                        });
+                    }).catch((error) => {
+                        callback(500, {
+                            Error: error
+                        });
+                    });
+                } else {
+                    console.log("Database object not found.");
+                    callback(500, {
+                        Error: "Database error occurred"
+                    });
+                }
+            } else {
+                callback(400, {
+                    Error: "Missing a required field or the value provided is invalid."
+                });
+            }
         },
         post: (data, callback) => {
             let phoneNumber = typeof (data.payload.phoneNumber) == "string" && data.payload.phoneNumber.trim().length == 12 ? data.payload.phoneNumber.trim() : false;
             let password = typeof (data.payload.password) == "string" && data.payload.password.trim().length > 0 ? data.payload.password.trim() : false;
-            if(phoneNumber && password){
+            if (phoneNumber && password) {
                 const db = getDb();
-                let query = { phoneNumber };
-                let projection = { password: 1, _id: 0 };
+                let query = {
+                    phoneNumber
+                };
+                let projection = {
+                    password: 1,
+                    _id: 0
+                };
                 let cursor = db.collection("users").find(query);
                 cursor.project(projection);
                 cursor.hasNext().then(response => {
-                    if(response){
-                       cursor.next().then( response => {
-                           if(helpers.hash(password) === response.password){
-                               let tokenId = helpers.createRamdomString(20);
-                               if(tokenId){
-                                   let expires  = Date.now() +  (60 * 60 * 1000);
-                                   let token = {
-                                       id: tokenId,
-                                       phoneNumber,
-                                       expires
-                                   };
-                                   db.collection("tokens").insertOne(token, { _id: 0}, (err, result) => {
-                                       if(err){
-                                           callback(500, { Error: "An error occurred while saving the token."});
-                                       } else if( result.insertedCount == 1) {
-                                           delete token._id;
-                                           callback(200, { token });
-                                       }else{
-                                           callback(500, { Error: "Could not save the token" });
-                                       };
-                                   });
-                               }else{
-                                   callback(500, { Error: "Could not create token." });
-                               }
-                           }else{
-                               callback(400, { Error: "The specified password did not match the specified user's password."});
-                           }
-                       }).catch(error => {
-                           callback(500, { Error: "Something went wrong while finding the specified user's password." });
-                       });
-                    }else{
-                        callback(400, { Error: "Could not find a user with the specified phoneNumber." });
+                    if (response) {
+                        cursor.next().then(response => {
+                            if (helpers.hash(password) === response.password) {
+                                let tokenId = helpers.createRamdomString(20);
+                                if (tokenId) {
+                                    let expires = Date.now() + (60 * 60 * 1000);
+                                    let token = {
+                                        id: tokenId,
+                                        phoneNumber,
+                                        expires
+                                    };
+                                    db.collection("tokens").insertOne(token, {
+                                        _id: 0
+                                    }, (err, result) => {
+                                        if (err) {
+                                            callback(500, {
+                                                Error: "An error occurred while saving the token."
+                                            });
+                                        } else if (result.insertedCount == 1) {
+                                            delete token._id;
+                                            callback(200, {
+                                                token
+                                            });
+                                        } else {
+                                            callback(500, {
+                                                Error: "Could not save the token"
+                                            });
+                                        };
+                                    });
+                                } else {
+                                    callback(500, {
+                                        Error: "Could not create token."
+                                    });
+                                }
+                            } else {
+                                callback(400, {
+                                    Error: "The specified password did not match the specified user's password."
+                                });
+                            }
+                        }).catch(error => {
+                            callback(500, {
+                                Error: "Something went wrong while finding the specified user's password."
+                            });
+                        });
+                    } else {
+                        callback(400, {
+                            Error: "Could not find a user with the specified phoneNumber."
+                        });
                     }
                 }).catch(error => {
-                    callback(500, { Error: "Something went wrong while finding the user with the specified phoneNumber." });
+                    callback(500, {
+                        Error: "Something went wrong while finding the user with the specified phoneNumber."
+                    });
                 });
-            }else{
-                callback(400, {Error: "Missing required field(s)."});
+            } else {
+                callback(400, {
+                    Error: "Missing required field(s)."
+                });
             }
         },
         put: (data, callback) => {
-
+            let id = typeof (data.payload.id) == "string" && data.payload.id.trim().length == 20 ? data.payload.id.trim() : false;
+            let extend = typeof (data.payload.extend) == "boolean" && data.payload.extend == true ? true : false;
+            if (id && extend) {
+                const db = getDb();
+                let query = {
+                    id
+                };
+                let projection = {
+                    _id: 0,
+                    expires: 1
+                };
+                let cursor = db.collection("tokens").find(query);
+                cursor.project(projection);
+                cursor.hasNext().then(response => {
+                    if (response) {
+                        cursor.next().then(response => {
+                            if (response.expires > Date.now()) {
+                                let expires = response.expires + (60 * 60 * 1000);
+                                let update = {
+                                    $set: {expires}
+                                };
+                                db.collection("tokens").updateOne(query, update, (err, result) => {
+                                    if (err) {
+                                        callback(500, {
+                                            Error: err
+                                        });
+                                    } else if (result.matchedCount == 0) {
+                                        callback(500, {
+                                            Error: "Could not find the token with the specified id."
+                                        });
+                                    } else if (result.modifiedCount == 0) {
+                                        callback(500, {
+                                            Error: "Could not extend the token."
+                                        });
+                                    } else {
+                                        callback(200, {
+                                            Success: "The token has been extended successfully."
+                                        });
+                                    }
+                                });
+                            } else {
+                                callback(400, {
+                                    Error: "Could not extend the token because it has already expired."
+                                });
+                            }
+                        }).catch(error => {
+                            callback(500, {
+                                Error: error
+                            });
+                        })
+                    } else {
+                        callback(400, {
+                            Error: "Could not find token with the specified id."
+                        });
+                    }
+                }).catch(error => {
+                    callback(500, {
+                        Error: error
+                    });
+                });
+            } else {
+                callback(400, {
+                    Error: "Missing required field(s) or invalid field(s)."
+                });
+            }
         },
         delete: (data, callback) => {
 
