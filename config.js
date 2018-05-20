@@ -4,14 +4,16 @@
         httpsPort: 3001,
         name: "staging",
         dbUrl: "mongodb://localhost:27017",
-        secret: "feourenncdsnfdsa"
+        secret: "feourenncdsnfdsa",
+        maxChecks: 5
     },
     production: {
         httpPort: 5000,
         httpsPort: 5001,
         name: "production",
         dbUrl: "mongodb://localhost:27017",
-        secret: "feourenncdsnfdsa"
+        secret: "feourenncdsnfdsa",
+        maxChecks: 5
     }
 }
 

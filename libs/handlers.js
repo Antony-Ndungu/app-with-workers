@@ -1,4 +1,6 @@
 const assert = require("assert");
+const { ObjectID, ObjectId } = require("mongodb");
+const config = require("../config");
 const {
     getDb
 } = require("./mongoUtil");
@@ -30,35 +32,68 @@ const handlers = {
             });
         }
     },
+    checks: (data, callback) => {
+        const accepatableMethods = ["get", "post", "put", "delete"];
+        if (accepatableMethods.indexOf(data.method) > -1) {
+            handlers._checks[data.method](data, callback);
+        } else {
+            callback(405, {
+                Error: "This service does not support the specified HTTP method for the specified resource."
+            });
+        }
+    },
     _users: {
         get: (data, callback) => {
             let phoneNumber = typeof (data.query.phoneNumber) == "string" && data.query.phoneNumber.trim().length == 12 ? data.query.phoneNumber.trim() : false;
-            const db = getDb();
+
             if (phoneNumber) {
-                if (db) {
-                    const query = {
-                        phoneNumber
-                    };
-                    const projection = {
-                        fields: {
-                            password: 0
+                let token = typeof (data.headers.token) == "string" && data.headers.token.trim().length == 20 ? data.headers.token.trim() : false;
+                if (token) {
+                    handlers._tokens.verifyToken(token, phoneNumber, tokenIsValid => {
+                        if (tokenIsValid) {
+                            const db = getDb();
+                            if (db) {
+                                const query = {
+                                    phoneNumber
+                                };
+                                const projection = {
+                                    fields: {
+                                        password: 0
+                                    }
+                                }
+                                db.collection("users").findOne(query, projection).then((result) => {
+                                    if (result) {
+                                        callback(200, {
+                                            result
+                                        });
+                                    } else {
+                                        callback(404);
+                                    }
+
+                                }).catch((error) => {
+                                    callback(500, {
+                                        Error: error
+                                    });
+                                });
+                            } else {
+                                console.log("Database object not found.");
+                                callback(500, {
+                                    Error: "Database error occurred"
+                                });
+                            }
+                        } else {
+                            callback(403, {
+                                Error: "Invalid access token."
+                            });
                         }
-                    }
-                    db.collection("users").findOne(query, projection).then((result) => {
-                        callback(200, {
-                            result
-                        });
-                    }).catch((error) => {
-                        callback(500, {
-                            Error: error
-                        });
                     });
                 } else {
-                    console.log("Database object not found.");
-                    callback(500, {
-                        Error: "Database error occurred"
+                    callback(403, {
+                        Error: "Missing token in the header or invalid token."
                     });
                 }
+
+
             } else {
                 callback(400, {
                     Error: "Missing required fields."
@@ -107,7 +142,7 @@ const handlers = {
                             });
                         } else {
                             callback(409, {
-                                "Error": "There's another update with the same phone number: " + phoneNumber + "."
+                                "Error": "There's another user with the same phone number: " + phoneNumber + "."
                             });
                         }
                     }).catch((error) => {
@@ -132,81 +167,98 @@ const handlers = {
             let firstname = typeof (data.payload.firstname) == "string" && data.payload.firstname.trim().length > 0 ? data.payload.firstname.trim() : false;
             let lastname = typeof (data.payload.lastname) == "string" && data.payload.lastname.trim().length > 0 ? data.payload.lastname.trim() : false;
             let password = typeof (data.payload.password) == "string" && data.payload.password.trim().length > 0 ? data.payload.password.trim() : false;
-            let db = getDb();
             if (phoneNumber) {
-                if (firstname || lastname || password) {
-                    if (db) {
-                        let filter = {
-                            phoneNumber
-                        };
-                        let update = {};
-                        let projection = {
-                            phoneNumber: 1,
-                            _id: 0
-                        };
-                        let cursor = db.collection("users").find(filter)
-                        cursor.project(projection);
-                        cursor.hasNext().then(response => {
-                            if (response) {
-                                if (firstname) {
-                                    update = { ...update,
-                                        firstname
+                let token = typeof (data.headers.token) == "string" && data.headers.token.trim().length == 20 ? data.headers.token.trim() : false;
+                if (token) {
+                    handlers._tokens.verifyToken(token, phoneNumber, tokenIsValid => {
+                        if (tokenIsValid) {
+                            const db = getDb();
+                            if (firstname || lastname || password) {
+                                if (db) {
+                                    let filter = {
+                                        phoneNumber
                                     };
-                                }
-                                if (lastname) {
-                                    update = { ...update,
-                                        lastname
+                                    let update = {};
+                                    let projection = {
+                                        phoneNumber: 1,
+                                        _id: 0
                                     };
+                                    let cursor = db.collection("users").find(filter)
+                                    cursor.project(projection);
+                                    cursor.hasNext().then(response => {
+                                        if (response) {
+                                            if (firstname) {
+                                                update = { ...update,
+                                                    firstname
+                                                };
+                                            }
+                                            if (lastname) {
+                                                update = { ...update,
+                                                    lastname
+                                                };
+                                            }
+                                            if (password) {
+                                                update = { ...update,
+                                                    password: helpers.hash(password)
+                                                };
+                                            }
+                                            update = {
+                                                $set: update
+                                            };
+                                            db.collection("users").updateOne(filter, update, (err, result) => {
+                                                if (err) {
+                                                    callback(500, {
+                                                        Error: "An error occurred while trying to update the user."
+                                                    });
+                                                }
+                                                if (result.matchedCount != 1) {
+                                                    callback(500, {
+                                                        Error: "The specified user was not found."
+                                                    });
+                                                }
+                                                if (result.modifiedCount == 1) {
+                                                    callback(200, {
+                                                        Success: "The user was update successully"
+                                                    });
+                                                } else {
+                                                    callback(500, {
+                                                        Error: "Something went wrong while updating the user."
+                                                    });
+                                                }
+                                            });
+                                        } else {
+                                            callback(400, {
+                                                Error: "The specified user was not found."
+                                            });
+                                        }
+                                    }).catch(error => {
+                                        callback(500, {
+                                            Error: "Something went wrong while finding the user to update."
+                                        });
+                                    })
+                                } else {
+                                    callback(500, {
+                                        Error: "No database objecet found."
+                                    });
                                 }
-                                if (password) {
-                                    update = { ...update,
-                                        password: helpers.hash(password)
-                                    };
-                                }
-                                update = {
-                                    $set: update
-                                };
-                                db.collection("users").updateOne(filter, update, (err, result) => {
-                                    if (err) {
-                                        callback(500, {
-                                            Error: "An error occurred while trying to update the user."
-                                        });
-                                    }
-                                    if (result.matchedCount != 1) {
-                                        callback(500, {
-                                            Error: "The specified user was not found."
-                                        });
-                                    }
-                                    if (result.modifiedCount == 1) {
-                                        callback(200, {
-                                            Success: "The user was update successully"
-                                        });
-                                    } else {
-                                        callback(500, {
-                                            Error: "Something went wrong while updating the user."
-                                        });
-                                    }
-                                });
                             } else {
                                 callback(400, {
-                                    Error: "The specified user was not found."
+                                    Error: "Missing fields to update."
                                 });
                             }
-                        }).catch(error => {
-                            callback(500, {
-                                Error: "Something went wrong while finding the user to update."
+                        } else {
+                            callback(403, {
+                                Error: "Invalid access token."
                             });
-                        })
-                    } else {
-                        callback(500, {
-                            Error: "No database objecet found."
-                        });
-                    }
+                        }
+                    });
                 } else {
-                    callback(400, {
-                        Error: "Missing fields to update."
+                    callback(403, {
+                        Error: "Missing token in the header or invalid token."
                     });
                 }
+
+
             } else {
                 callback(400, {
                     Error: "Missing required fields."
@@ -216,40 +268,55 @@ const handlers = {
         delete: (data, callback) => {
             let phoneNumber = typeof (data.query.phoneNumber) == "string" && data.query.phoneNumber.trim().length == 12 ? data.query.phoneNumber.trim() : false;
             if (phoneNumber) {
-                const db = getDb();
-                if (db) {
-                    let filter = {
-                        phoneNumber
-                    };
-                    let projection = {
-                        phoneNumber: 1,
-                        _id: 0
-                    };
-                    let cursor = db.collection("users").find(filter);
-                    cursor.project(projection);
-                    cursor.hasNext().then(response => {
-                        if (response) {
-                            db.collection("users").deleteOne(filter, (err, result) => {
-                                assert.equal(null, err);
-                                assert.equal(1, result.deletedCount);
-                                console.log(result);
-                                callback(200, {
-                                    Success: "User was deleted successfully"
+                let token = typeof (data.headers.token) == "string" && data.headers.token.trim().length == 20 ? data.headers.token.trim() : false;
+                if (token) {
+                    handlers._tokens.verifyToken(token, phoneNumber, tokenIsValid => {
+                        if (tokenIsValid) {
+                            const db = getDb();
+                            if (db) {
+                                let filter = {
+                                    phoneNumber
+                                };
+                                let projection = {
+                                    phoneNumber: 1,
+                                    _id: 0
+                                };
+                                let cursor = db.collection("users").find(filter);
+                                cursor.project(projection);
+                                cursor.hasNext().then(response => {
+                                    if (response) {
+                                        db.collection("users").deleteOne(filter, (err, result) => {
+                                            assert.equal(null, err);
+                                            assert.equal(1, result.deletedCount);
+                                            callback(200, {
+                                                Success: "User was deleted successfully"
+                                            });
+                                        });
+                                    } else {
+                                        callback(400, {
+                                            Error: "The specified user does not exist."
+                                        });
+                                    }
+                                }).catch(error => {
+
                                 });
-                            });
+                            } else {
+                                callback(500, {
+                                    Error: "Could not find the database object"
+                                });
+                            }
                         } else {
-                            callback(400, {
-                                Error: "The specified user does not exist."
+                            callback(403, {
+                                Error: "Invalid access token."
                             });
                         }
-                    }).catch(error => {
-
                     });
                 } else {
-                    callback(500, {
-                        Error: "Could not find the database object"
+                    callback(403, {
+                        Error: "Missing token in the header or invalid token."
                     });
                 }
+
             } else {
                 callback(400, {
                     Error: "Missing required field."
@@ -272,9 +339,13 @@ const handlers = {
                         }
                     }
                     db.collection("tokens").findOne(query, projection).then((result) => {
-                        callback(200, {
-                            result
-                        });
+                        if (result) {
+                            callback(200, {
+                                result
+                            });
+                        } else {
+                            callback(404);
+                        }
                     }).catch((error) => {
                         callback(500, {
                             Error: error
@@ -387,7 +458,9 @@ const handlers = {
                             if (response.expires > Date.now()) {
                                 let expires = response.expires + (60 * 60 * 1000);
                                 let update = {
-                                    $set: {expires}
+                                    $set: {
+                                        expires
+                                    }
                                 };
                                 db.collection("tokens").updateOne(query, update, (err, result) => {
                                     if (err) {
@@ -435,6 +508,197 @@ const handlers = {
             }
         },
         delete: (data, callback) => {
+            let id = typeof (data.query.id) == "string" && data.query.id.trim().length == 20 ? data.query.id.trim() : false;
+            if (id) {
+                const db = getDb();
+                let cursor = db.collection("tokens").find({
+                    id
+                });
+                cursor.project({
+                    id: 1,
+                    _id: 0
+                });
+                cursor.hasNext().then(response => {
+                    if (response) {
+                        db.collection("tokens").deleteOne({
+                            id
+                        }, (err, result) => {
+                            if (err) {
+                                callback(500, {
+                                    Error: err
+                                });
+                            } else if (result.deletedCount == 1) {
+                                callback(200, {
+                                    Success: "The token was deleted successfully."
+                                });
+                            } else {
+                                callback(500, {
+                                    Error: "Could not delete the token"
+                                });
+                            }
+                        });
+                    } else {
+                        callback(400, {
+                            Error: "Could not find a token with the specified id."
+                        });
+                    }
+                }).catch(error => {
+                    callback(500, {
+                        Error: error
+                    });
+                })
+
+            } else {
+                callback(400, {
+                    Error: "Missing required field or invalid field"
+                });
+            }
+        },
+        verifyToken: (id, phoneNumber, callback) => {
+            id = typeof (id) == "string" && id.length == 20 ? id : false;
+            phoneNumber = typeof (phoneNumber) == "string" && phoneNumber.length > 0 ? phoneNumber : false;
+            if (id && phoneNumber) {
+                let query = {
+                    id
+                };
+                let projection = {
+                    _id: 0
+                };
+                const db = getDb();
+                let cursor = db.collection("tokens").find(query);
+                cursor.project(projection);
+                cursor.hasNext().then(response => {
+                    if (response) {
+                        cursor.next().then(response => {
+                            if (response.phoneNumber == phoneNumber && response.expires > Date.now()) {
+                                callback(true);
+                            } else {
+                                callback(false);
+                            }
+                        }).catch(error => {
+                            callback(false);
+                        });
+                    } else {
+                        callback(false);
+                    }
+                }).catch(error => {
+                    callback(false);
+                });
+            } else {
+                return callback(false);
+            }
+        }
+    },
+    _checks: {
+        get: (data, callback) =>{
+            let _id = typeof(data.query._id) == "string" && ObjectID.isValid(data.query._id) ? data.query._id.trim() : false;
+            if(_id){
+                let token = typeof(data.headers.token) == "string" && data.headers.token.trim().length > 0? data.headers.token.trim() : false;
+                if(token){
+                    const db = getDb();
+                    db.collection("checks").findOne({_id: ObjectId(_id)}, (err, result) => {
+                        if(err){
+                            callback(500, { Error: "An error occured while finding the check with the specified _id." });
+                        }else{
+                            if(result){
+                                handlers._tokens.verifyToken(token, result.phoneNumber, (tokenIsValid) => {
+                                    if(tokenIsValid){
+                                        callback(200, { Success: result });
+                                    }else{
+                                        callback(403);
+                                    }
+                                });
+                            }else{
+                                callback(404);
+                            }
+                        }
+                    });
+                }else{
+                    callback(403);
+                }
+            }else{
+                callback(400, { Error: "Missing required input or input is invalid."} );
+            }
+        },
+        post: (data, callback) =>{
+            let protocol = typeof(data.payload.protocol) == "string" && [ "https" , "http" ].indexOf(data.payload.protocol) > -1? data.payload.protocol : false;
+            let url = typeof(data.payload.url) == "string" && data.payload.url.trim().length > 0 ? data.payload.url.trim() : false;
+            let method = typeof(data.payload.method) == "string" && ["get", "post", "put", "delete"].indexOf(data.payload.method) > -1? data.payload.method: false;
+            let successCodes = typeof(data.payload.successCodes) == "object" && data.payload.successCodes instanceof Array && data.payload.successCodes.length > 0 ? data.payload.successCodes: false;
+            let timeSeconds = typeof(data.payload.timeSeconds) == "number" && data.payload.timeSeconds % 1 === 0 && data.payload.timeSeconds >= 1 && data.payload.timeSeconds <= 5? data.payload.timeSeconds : false;
+            if(protocol && url && method && successCodes && timeSeconds){
+                let token = typeof(data.headers.token) ==  "string" && data.headers.token.trim().length > 0 ? data.headers.token.trim() : false;
+                if(token){
+                    let query = { id: token };
+                    let projection = { fields: { _id: 0, phoneNumber: 1 }};
+                    let db = getDb();
+                    db.collection("tokens").findOne(query, projection, (err, result) => {
+                        if(err){
+                            callback(500, { Error: "Something went wrong while finding the access token."});
+                        }else if(result){
+                            let query = { phoneNumber: result.phoneNumber };
+                            let projection = { _id: 0, checks: 1, phoneNumber: 1 };
+                            db.collection("users").findOne(query, projection, (err ,result) => {
+                                if(err){
+                                    callback(500, { Error: "Something went wring while finding the user corresponding to the access token provided"});
+                                }else{
+                                    if(result){
+                                        let userChecks = typeof(result.checks) == "object" && result.checks instanceof Array ? result.checks : [];
+                                        let userPhone = result.phoneNumber;
+                                        if(userChecks.length < config.maxChecks){
+                                            let check = {
+                                                protocol,
+                                                url,
+                                                method,
+                                                successCodes,
+                                                timeSeconds,
+                                                phoneNumber: result.phoneNumber
+                                            }
+                                            db.collection("checks").insertOne(check, (err, result) => {
+                                                if(err){
+                                                    callback(500, { Error: "An error occurred while saving the check."} );
+                                                }else{
+                                                    if(result.insertedCount == 1) {
+                                                        userChecks.push(result.insertedId);
+                                                        db.collection("users").updateOne({ phoneNumber: userPhone }, { $set:{checks: userChecks}}, (err, result) => {
+                                                            if(err){
+                                                                callback(500, { Error: "An error occured while updating the user's checks"});
+                                                            }else{
+                                                                if(result.modifiedCount == 1){
+                                                                    callback(200, { Success: check});
+                                                                }else{
+                                                                    callback(500, { Error: "Something went wrong while updating the user's checks." });
+                                                                }
+                                                            }
+                                                        });
+                                                    }else{
+                                                        callback(500, { Error: "Something went wrong while saving the check."});
+                                                    }
+                                                }
+                                            });
+                                        } else{
+                                            callback(400, { Error: "You already have the maximum number of checks (" + config.maxChecks + ")"});
+                                        }
+                                    }else{
+                                        callback(403);
+                                    }
+                                }
+                            });
+                        }else{
+                            callback(403);
+                        }
+                    });
+                }else{
+                    callback(403);
+                }
+            }else{ 
+                callback(400, { Error: "Missing required input(s) or input(s) are invalid."});
+            }
+        },
+        put: (data, callback) =>{
+
+        },
+        delete: (data, callback) =>{
 
         }
     }
