@@ -5,7 +5,12 @@
         name: "staging",
         dbUrl: "mongodb://localhost:27017",
         secret: "feourenncdsnfdsa",
-        maxChecks: 5
+        maxChecks: 5,
+        twilio: {
+            fromPhoneNumber: "+16513839026",
+            accountSid: "ACff04c511fc5a0604f6f3a563bfa1a20d",
+            authToken: "3c854eb3a1aacd2ecfa25964176fe75f"
+        }
     },
     production: {
         httpPort: 5000,
@@ -13,7 +18,12 @@
         name: "production",
         dbUrl: "mongodb://localhost:27017",
         secret: "feourenncdsnfdsa",
-        maxChecks: 5
+        maxChecks: 5,
+        twilio: {
+            fromPhoneNumber: "",
+            accountSid: "",
+            authToken: ""
+        }
     }
 }
 
