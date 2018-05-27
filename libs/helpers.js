@@ -32,12 +32,13 @@ const helpers = {
         }
     },
     sendTwilioSMS: (phoneNumber, message , callback) => {
-        phoneNumber = typeof(phoneNumber) == "string" && phoneNumber.trim().length == 9 ? phoneNumber.trim() : false;
+        phoneNumber = typeof(phoneNumber) == "string" && phoneNumber.trim().length == 12 ? phoneNumber.trim() : false;
         message = typeof(message) == "string" && message.trim().length > 0 && message.trim().length < 1600 ? message.trim() : false;
+       
         if(phoneNumber && message){
             let payload = {
                 From : config.twilio.fromPhoneNumber,
-                To: "+254" + phoneNumber,
+                To: "+" + phoneNumber,
                 Body: message
             }
             let stringPayload = querystring.stringify(payload);
