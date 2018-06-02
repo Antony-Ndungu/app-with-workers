@@ -1,0 +1,1 @@
+{"check":{"_id":"5b1119d1ce05030e21895c70","protocol":"http","url":"facebook.com","method":"get","successCodes":[200,201,300,301],"timeSeconds":4,"phoneNumber":"254710860780","lastChecked":1527944571544,"state":"down"},"outcome":{"error":{"error":true,"value":"timeout"},"responseCode":false},"state":"down","alert":false,"time":1527944590469}

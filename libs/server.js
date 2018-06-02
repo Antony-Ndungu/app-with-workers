@@ -3,6 +3,8 @@ const https = require("https");
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
+const util = require("util");
+const debug = util.debuglog("server");
 const config = require("../config");
 const handlers = require("./handlers");
 const {
@@ -12,8 +14,8 @@ const mongoUtil = require("./mongoUtil");
 
 const server = {
     init: () => {
-        server.httpServer.listen(config.httpPort, () => console.log("HTTP Server is listening on port", config.httpPort, "on", config.name, "mode"));
-        server.httpsServer.listen(config.httpsPort, () => console.log("HTTPS Server is listening on port", config.httpsPort, "on", config.name, "mode"));                        
+        server.httpServer.listen(config.httpPort, () => console.log('\x1b[33m%s\x1b[0m', "HTTP Server is listening on port " + config.httpPort + " on " + config.name + " mode"));
+        server.httpsServer.listen(config.httpsPort, () => console.log('\x1b[34m%s\x1b[0m', "HTTPS Server is listening on port " + config.httpsPort + " on " + config.name + " mode"));                        
     },
     router: {
         "ping": handlers.ping,
@@ -53,6 +55,11 @@ const server = {
                 res.setHeader("Content-Type", "application/json");
                 res.writeHead(statusCode);
                 res.end(JSON.stringify(payload));
+                if(statusCode == 200){
+                    debug('\x1b[32m%s\x1b[0m', statusCode + " " + data.method.toUpperCase() + " /" + data.trimmedPath);
+                }else{
+                    debug('\x1b[31m%s\x1b[0m', statusCode + " " + data.method.toUpperCase() + " /" + data.trimmedPath);
+                }
             });
         })
     },

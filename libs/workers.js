@@ -1,6 +1,9 @@
 const http = require("http");
 const https = require("https");
 const url = require("url");
+const util = require("util");
+const debug = util.debuglog("workers");
+const _logs = require("./logs");
 const helpers = require("./helpers");
 const {
     ObjectID,
@@ -11,9 +14,15 @@ const {
 } = require("./mongoUtil");
 
 const workers = {
+    //Init script
     init: () => {
+        //Execute all checks immediately
         workers.gatherAllChecks();
         workers.loop();
+        //Compress all log files immediately
+        workers.rotateLogs();
+        //Call the compression loop
+        workers.logRotationLoop();
     },
     gatherAllChecks: () => {
         const db = getDb();
@@ -24,9 +33,9 @@ const workers = {
                     workers.validateCheckData(check);
                 });
             } else {
-                console.log("Could not find any check to process.");
+                debug("Could not find any check to process.");
             }
-        }).catch(e => console.log(e));
+        }).catch(e => debug(e));
     },
     validateCheckData: (originalCheckData) => {
         originalCheckData = typeof (originalCheckData) == 'object' && originalCheckData !== null ? originalCheckData : {};
@@ -50,7 +59,7 @@ const workers = {
             workers.performCheck(originalCheckData);
         } else {
             // If checks fail, log the error and fail silently
-            console.log("Error: one of the checks is not properly formatted. Skipping.");
+            debug("Error: one of the checks is not properly formatted. Skipping.");
         }
     },
     performCheck: (originalCheckData) => {
@@ -121,11 +130,15 @@ const workers = {
 
         // Decide if an alert is warranted
         var alertWarranted = originalCheckData.lastChecked && originalCheckData.state !== state ? true : false;
+        let timeOfCheck = Date.now();
+
+        //log the outcome
+        workers.log(originalCheckData, checkOutcome, state, alertWarranted, timeOfCheck);
 
         // Update the check data
         var newCheckData = originalCheckData;
         newCheckData.state = state;
-        newCheckData.lastChecked = Date.now();
+        newCheckData.lastChecked = timeOfCheck;
 
         // Save the updates
         const db = getDb();
@@ -135,16 +148,16 @@ const workers = {
             $set: newCheckData
         }, (err, result) => {
             if (err) {
-                console.log(err);
+                debug(err);
             } else {
                 if (result.matchedCount == 1 && result.modifiedCount == 1) {
                     if (alertWarranted) {
                         workers.alertUserToStatusChange(newCheckData);
                     } else {
-                        console.log("Check outcome has not changed, no alert needed");
+                        debug("Check outcome has not changed, no alert needed");
                     }
                 } else {
-                    console.log("Failed to update the check data.");
+                    debug("Failed to update the check data.");
                 }
             }
         });
@@ -153,9 +166,67 @@ const workers = {
         var msg = 'Alert: Your check for ' + newCheckData.method.toUpperCase() + ' ' + newCheckData.protocol + '://' + newCheckData.url + ' is currently ' + newCheckData.state;
         helpers.sendTwilioSMS(newCheckData.phoneNumber, msg, function (err) {
             if (!err) {
-                console.log("Success: User was alerted to a status change in their check, via sms: ", msg);
+                debug("Success: User was alerted to a status change in their check, via sms: ", msg);
             } else {
-                console.log("Error: Could not send sms alert to user who had a state change in their check", err);
+                debug("Error: Could not send sms alert to user who had a state change in their check", err);
+            }
+        });
+    },
+    //Send log data to a log file
+    log : (originalCheckData, checkOutcome, state, alertWarranted, timeOfCheck) => {
+        //Form log data
+        let logData = {
+            check: originalCheckData,
+            outcome: checkOutcome,
+            state,
+            alert: alertWarranted,
+            time: timeOfCheck
+        }
+        //Convert log data to a string
+        let logString = JSON.stringify(logData);
+
+        //Determine the name of the log file
+        let fileName = originalCheckData._id;
+
+        //Append the log string to file
+        _logs.append(fileName, logString, err => {
+            if(err){
+                debug("Logging to fail failed.");
+            }else{
+                debug("Logging to file succeeded.");
+            }
+        })
+
+    },
+    logRotationLoop: () => {
+        setInterval(() => {
+            workers.rotateLogs();
+        }, 24 * 60 * 60 * 100);
+    },
+    //compress log files
+    rotateLogs: () => {
+        //List all non-compressed files
+        _logs.list(false, (err, logs) => {
+            if(!err && logs && logs.length > 0){
+                logs.forEach(logName => {
+                    let logId = logName.replace(".log", "");
+                    let newFileId = logId + "-" + Date.now();
+                    _logs.compress(logId, newFileId, err => {
+                        if(err){
+                            debug("Error compressing one of the log files");
+                        }else{
+                            _logs.truncate(logId, err => {
+                                if(err){
+                                    debug("Error truncationg logfile");
+                                }else{
+                                    debug("Success truncating log file");
+                                }
+                            });
+                        }
+                    });
+                });
+            }else{
+                debug("Could not find any logs to compress.");
             }
         });
     },

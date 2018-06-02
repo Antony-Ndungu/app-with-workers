@@ -1,0 +1,1 @@
+{"check":{"_id":"5b0aab4e65e7bd36897fbdfc","protocol":"https","url":"google.com","method":"get","successCodes":[200,201,300,301],"timeSeconds":4,"phoneNumber":"254710860780","lastChecked":1527944571748,"state":"up"},"outcome":{"error":false,"responseCode":301},"state":"up","alert":false,"time":1527944587618}

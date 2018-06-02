@@ -11,7 +11,7 @@ const mongoUtil = {
         callback = typeof(callback) == "function" ? callback : (db) => {};
         MongoClient.connect(config.dbUrl, { useNewUrlParser: true }, (err, client) => {
             assert.equal(null, err);
-            console.log("Connected to mongodb server successfully.");
+            console.log('\x1b[32m%s\x1b[0m', "Connected to mongodb server successfully.");
             db = client.db("app");
             callback(db);
         });
